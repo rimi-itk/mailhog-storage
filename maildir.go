@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/mailhog/data"
@@ -119,6 +120,8 @@ func (maildir *Maildir) Search(kind, query string, start, limit int) (*data.Mess
 		log.Println(err)
 	}
 
+	filteredMessages = maildir.sortAndSlice(filteredMessages, start, limit, "-created")
+
 	msgs := data.Messages(filteredMessages)
 	return &msgs, len(filteredMessages), nil
 }
@@ -152,9 +155,41 @@ func (maildir *Maildir) List(start, limit int) (*data.Messages, error) {
 		messages = append(messages, m)
 	}
 
+	messages = maildir.sortAndSlice(messages, start, limit, "-created")
+
 	log.Printf("Found %d messages", len(messages))
 	msgs := data.Messages(messages)
 	return &msgs, nil
+}
+
+func (maildir *Maildir) sortAndSlice(messages []data.Message, start, limit int, order string) []data.Message {
+	sort.Slice(messages, func(i, j int) bool {
+		switch order {
+		case "created":
+			return messages[i].Created.Before(messages[j].Created)
+		case "-created":
+			return messages[i].Created.After(messages[j].Created)
+		}
+		return false
+	})
+
+	if start > len(messages) {
+		start = len(messages)
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + limit
+	if end > len(messages) {
+		end = len(messages)
+	}
+	if end < start {
+		end = start
+	}
+
+	messages = messages[start:end]
+
+	return messages
 }
 
 // DeleteOne deletes an individual message by storage ID
